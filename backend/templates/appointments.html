@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Rendez-vous{% endblock %}
+{% block page %}appointments{% endblock %}
+{% block roles %}ADMIN,SECRETAIRE{% endblock %}
+
+{% block extra_style %}
+    .agenda-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .range-label { font-weight: 800; font-size: 1.05rem; text-transform: capitalize; margin: 0 6px; }
+    .days { display: grid; gap: 14px; }
+    .day { min-width: 0; }
+    .day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 4px 8px; }
+    .day-name { font-weight: 800; text-transform: capitalize; }
+    .day.today .day-name { color: var(--primary); }
+    .day-count { font-size: .8rem; color: var(--muted); }
+    .day-empty { padding: 14px; border: 1px dashed var(--border-strong); border-radius: 12px; color: var(--muted); font-size: .88rem; text-align: center; }
+    .slot {
+        display: flex; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+        padding: 12px 14px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border);
+        border-left: 4px solid var(--slot, var(--primary)); border-radius: 12px; box-shadow: var(--shadow);
+        transition: transform .1s ease, border-color .15s ease;
+    }
+    .slot:hover { transform: translateY(-1px); border-color: var(--border-strong); border-left-color: var(--slot, var(--primary)); }
+    .slot.is-cancelled { opacity: .55; }
+    .slot.is-cancelled .person-name { text-decoration: line-through; }
+    .slot-time { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 48px; }
+    .slot-time small { display: block; font-weight: 500; color: var(--muted); font-size: .78rem; }
+    .slot .grow { flex: 1; min-width: 0; }
+    .slot .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    @media (min-width: 1280px) {
+        .days.week { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+        .days.week .slot { flex-direction: column; gap: 4px; padding: 10px; }
+        .days.week .slot .meta .badge:not(:first-child) { display: none; }
+        .days.week .day-head { flex-direction: column; gap: 0; }
+    }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .status-grid .choice span { width: 100%; border-radius: 10px; justify-content: flex-start; }
+    .detail-list { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0 0 20px; }
+    .detail-list dt { color: var(--muted); font-size: .88rem; }
+    .detail-list dd { margin: 0; font-weight: 600; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Rendez-vous</h1>
+            <p>Agenda du cabinet et suivi de la salle d'attente.</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn" type="button" id="newBtn"><i data-icon="plus" data-size="18"></i>Nouveau rendez-vous</button>
+        </div>
+    </div>
+
+    <div class="toolbar" style="justify-content:space-between">
+        <div class="agenda-nav">
+            <button class="icon-btn" type="button" id="prevBtn" aria-label="Période précédente"><i data-icon="chevronLeft" data-size="18"></i></button>
+            <button class="btn btn-outline btn-sm" type="button" id="todayBtn">Aujourd'hui</button>
+            <button class="icon-btn" type="button" id="nextBtn" aria-label="Période suivante"><i data-icon="chevronRight" data-size="18"></i></button>
+            <span class="range-label" id="rangeLabel"></span>
+        </div>
+        <div class="row">
+            <select id="praticienFilter" style="width:auto;min-height:40px" aria-label="Filtrer par praticien"><option value="">Tous les praticiens</option></select>
+            <div class="segmented" id="viewSwitch" role="group" aria-label="Affichage">
+                <button type="button" data-view="day" aria-pressed="false">Jour</button>
+                <button type="button" data-view="week" aria-pressed="true">Semaine</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="days week" id="days"><span class="skeleton" style="display:block;height:120px"></span></div>
+
+    <!-- Nouveau rendez-vous -->
+    <dialog class="sheet" id="rdvDialog" aria-labelledby="rdTitle">
+        <form id="rdvForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="rdTitle">Nouveau rendez-vous</h2><p>Choisissez le patient, le praticien et le créneau.</p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div class="form-section">
+                    <div class="field">
+                        <label class="req" for="rPatientSearch">Patient</label>
+                        <input id="rPatientSearch" type="search" placeholder="Filtrer la liste par nom…" autocomplete="off">
+                        <select id="rPatient" name="patient" size="5" required style="min-height:150px"></select>
+                        <span class="hint">Patient absent de la liste ? <a href="/patients/?new=1">Créer son dossier</a></span>
+                    </div>
+                    <div class="field">
+                        <label class="req" for="rPraticien">Praticien</label>
+                        <select id="rPraticien" name="praticien" required></select>
+                    </div>
+                    <div class="form-grid">
+                        <div class="field"><label class="req" for="rDate">Date</label><input id="rDate" name="date" type="date" required></div>
+                        <div class="field"><label class="req" for="rHeure">Heure</label><input id="rHeure" name="heure" type="time" step="300" required></div>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Durée</span>
+                        <div class="choice-group">
+                            <label class="choice"><input type="radio" name="duree" value="15"><span>15 min</span></label>
+                            <label class="choice"><input type="radio" name="duree" value="20"><span>20 min</span></label>
+                            <label class="choice"><input type="radio" name="duree" value="30" checked><span>30 min</span></label>
+                            <label class="choice"><input type="radio" name="duree" value="45"><span>45 min</span></label>
+                            <label class="choice"><input type="radio" name="duree" value="60"><span>1 h</span></label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Type de consultation</span>
+                        <div class="choice-group">
+                            <label class="choice"><input type="radio" name="type_consultation" value="PREMIERE"><span>Première visite</span></label>
+                            <label class="choice"><input type="radio" name="type_consultation" value="SUIVI" checked><span>Suivi</span></label>
+                            <label class="choice"><input type="radio" name="type_consultation" value="URGENCE"><span>Urgence</span></label>
+                        </div>
+                    </div>
+                    <div class="field"><label for="rMotif">Motif</label><textarea id="rMotif" name="motif" rows="2" style="min-height:70px" placeholder="Ex. contrôle tension, renouvellement…"></textarea></div>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot">
+                <button class="btn btn-ghost" type="button" data-close>Annuler</button>
+                <button class="btn" type="submit">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Détail / changement de statut -->
+    <dialog class="sheet" id="detailDialog" aria-labelledby="ddTitle">
+        <form id="statusForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="ddTitle">Rendez-vous</h2><p id="ddSub"></p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <dl class="detail-list" id="ddInfo"></dl>
+                <div class="field">
+                    <span class="field-label">Statut</span>
+                    <div class="status-grid" id="statusChoices"></div>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot">
+                <button class="btn btn-ghost" type="button" data-close>Fermer</button>
+                <button class="btn" type="submit">Mettre à jour</button>
+            </div>
+        </form>
+    </dialog>
+{% endblock %}
+
+{% block script %}
+    const SLOT_COLORS = { PLANIFIE: 'var(--info)', CONFIRME: 'var(--primary)', EN_SALLE: 'var(--warning)', EN_CONSULTATION: 'var(--warning)', TERMINE: 'var(--success)', ANNULE: 'var(--border-strong)', ABSENT: 'var(--danger)' };
+    const state = { view: window.matchMedia('(max-width: 700px)').matches ? 'day' : 'week', anchor: new Date(), rdvs: [], patients: {}, patientList: [], praticiens: {}, current: null };
+
+    const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+    const startOfWeek = d => { const x = startOfDay(d); const wd = (x.getDay() + 6) % 7; return addDays(x, -wd); };
+
+    function rangeDays() {
+        if (state.view === 'day') return [startOfDay(state.anchor)];
+        const s = startOfWeek(state.anchor);
+        return Array.from({ length: 7 }, (_, i) => addDays(s, i));
+    }
+
+    function slotHtml(r) {
+        const start = new Date(r.date_heure), end = new Date(start.getTime() + (r.duree || 30) * 60000);
+        const name = state.patients[r.patient] || 'Patient #' + r.patient;
+        const prat = state.praticiens[r.praticien];
+        return `<button type="button" class="slot${r.statut === 'ANNULE' ? ' is-cancelled' : ''}" data-id="${r.id}" style="--slot:${SLOT_COLORS[r.statut] || 'var(--primary)'}">
+            <span class="slot-time">${App.fmtTime(start)}<small>${App.fmtTime(end)}</small></span>
+            <span class="grow">
+                <span class="person-name">${App.esc(name)}</span>
+                <span class="person-sub" style="display:block">${App.esc(App.RDV_TYPES[r.type_consultation] || '')}${prat ? ' · Dr ' + App.esc(prat) : ''}</span>
+                <span class="meta">${App.badge(App.RDV_STATUTS, r.statut)}${r.type_consultation === 'URGENCE' ? '<span class="badge b-danger">Urgence</span>' : ''}</span>
+            </span>
+        </button>`;
+    }
+
+    function render() {
+        const days = rangeDays();
+        const fmt = { day: 'numeric', month: 'long' };
+        document.getElementById('rangeLabel').textContent = state.view === 'day'
+            ? App.fmtDateLong(days[0])
+            : `${days[0].toLocaleDateString('fr-FR', fmt)} – ${days[6].toLocaleDateString('fr-FR', { ...fmt, year: 'numeric' })}`;
+        document.querySelectorAll('#viewSwitch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === state.view));
+
+        const prat = document.getElementById('praticienFilter').value;
+        const todayIso = App.isoDate(new Date());
+        const container = document.getElementById('days');
+        container.className = 'days ' + state.view;
+        container.innerHTML = days.map(d => {
+            const iso = App.isoDate(d);
+            const items = state.rdvs.filter(r => App.isoDate(new Date(r.date_heure)) === iso && (!prat || String(r.praticien) === prat))
+                .sort((a, b) => new Date(a.date_heure) - new Date(b.date_heure));
+            const active = items.filter(r => r.statut !== 'ANNULE').length;
+            return `<section class="day${iso === todayIso ? ' today' : ''}">
+                <div class="day-head">
+                    <span class="day-name">${App.esc(d.toLocaleDateString('fr-FR', { weekday: state.view === 'day' ? 'long' : 'short', day: 'numeric', month: state.view === 'day' ? 'long' : 'short' }))}</span>
+                    <span class="day-count">${active ? active + ' RDV' : ''}</span>
+                </div>
+                ${items.length ? items.map(slotHtml).join('') : `<div class="day-empty">${state.view === 'week' ? 'Libre' : 'Aucun rendez-vous'}</div>`}
+            </section>`;
+        }).join('');
+    }
+
+    async function loadAll() {
+        try {
+            const [rdvs, patients, praticiens] = await Promise.all([
+                App.fetchAll('/api/v1/rdv/?ordering=date_heure'),
+                App.fetchAll('/api/v1/patients/?statut=ACTIF'),
+                App.api('/api/v1/auth/praticiens/').catch(() => []),
+            ]);
+            state.rdvs = rdvs;
+            state.patientList = patients;
+            state.patients = Object.fromEntries(patients.map(p => [p.id, p.nom_complet]));
+            // Patients inactifs ayant encore des RDV : on récupère leur nom au besoin.
+            const missing = [...new Set(rdvs.map(r => r.patient).filter(id => !state.patients[id]))];
+            await Promise.all(missing.slice(0, 30).map(id => App.api(`/api/v1/patients/${id}/`).then(p => state.patients[id] = p.nom_complet).catch(() => {})));
+            state.praticiens = Object.fromEntries(praticiens.map(u => [u.id, u.nom_complet]));
+            const opts = praticiens.map(u => `<option value="${u.id}">Dr ${App.esc(u.nom_complet)}</option>`).join('');
+            document.getElementById('praticienFilter').innerHTML = '<option value="">Tous les praticiens</option>' + opts;
+            document.getElementById('rPraticien').innerHTML = praticiens.length ? opts : '<option value="">Aucun médecin enregistré</option>';
+            render();
+        } catch (e) {
+            document.getElementById('days').innerHTML = `<div class="card">${App.emptyState('Impossible de charger l’agenda', e.message, 'alert')}</div>`;
+        }
+    }
+
+    /* Navigation */
+    const step = dir => { state.anchor = addDays(state.anchor, dir * (state.view === 'day' ? 1 : 7)); render(); };
+    document.getElementById('prevBtn').addEventListener('click', () => step(-1));
+    document.getElementById('nextBtn').addEventListener('click', () => step(1));
+    document.getElementById('todayBtn').addEventListener('click', () => { state.anchor = new Date(); render(); });
+    document.getElementById('praticienFilter').addEventListener('change', render);
+    document.getElementById('viewSwitch').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        state.view = b.dataset.view; render();
+    });
+
+    /* Création */
+    const rdvForm = document.getElementById('rdvForm');
+    function fillPatients(filter = '') {
+        const f = filter.toLowerCase();
+        const list = state.patientList.filter(p => !f || `${p.nom} ${p.prenom} ${p.telephone || ''}`.toLowerCase().includes(f));
+        document.getElementById('rPatient').innerHTML = list.length
+            ? list.map(p => `<option value="${p.id}">${App.esc(p.nom)} ${App.esc(p.prenom)} — ${App.esc(App.fmtDate(p.date_naissance))}</option>`).join('')
+            : '<option value="" disabled>Aucun patient ne correspond</option>';
+    }
+    document.getElementById('rPatientSearch').addEventListener('input', e => fillPatients(e.target.value));
+    document.getElementById('newBtn').addEventListener('click', () => {
+        rdvForm.reset();
+        fillPatients();
+        const base = state.view === 'day' ? new Date(state.anchor) : new Date();
+        document.getElementById('rDate').value = App.isoDate(base < startOfDay(new Date()) ? new Date() : base);
+        const now = new Date(); now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+        document.getElementById('rHeure').value = now.toTimeString().slice(0, 5);
+        App.openDialog('rdvDialog');
+    });
+    rdvForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(rdvForm);
+        const payload = {
+            patient: fd.get('patient'), praticien: fd.get('praticien'),
+            date_heure: `${fd.get('date')}T${fd.get('heure')}`,
+            duree: Number(fd.get('duree')) || 30, type_consultation: fd.get('type_consultation'),
+            statut: 'PLANIFIE', motif: (fd.get('motif') || '').trim(),
+        };
+        if (!payload.patient) return App.showFormError(rdvForm, 'Sélectionnez un patient dans la liste.');
+        if (!payload.praticien) return App.showFormError(rdvForm, 'Sélectionnez un praticien.');
+        if (!fd.get('date') || !fd.get('heure')) return App.showFormError(rdvForm, 'Indiquez la date et l’heure du rendez-vous.');
+        await App.withBusy(rdvForm.querySelector('[type=submit]'), async () => {
+            try {
+                await App.api('/api/v1/rdv/', { method: 'POST', body: payload });
+                document.getElementById('rdvDialog').close();
+                App.toast('Rendez-vous enregistré.');
+                state.anchor = new Date(payload.date_heure);
+                loadAll();
+            } catch (err) { App.showFormError(rdvForm, err.message); }
+        });
+    });
+
+    /* Détail + statut */
+    const statusForm = document.getElementById('statusForm');
+    document.getElementById('days').addEventListener('click', e => {
+        const slot = e.target.closest('.slot'); if (!slot) return;
+        const r = state.rdvs.find(x => x.id === Number(slot.dataset.id)); if (!r) return;
+        state.current = r;
+        document.getElementById('ddTitle').textContent = state.patients[r.patient] || 'Rendez-vous';
+        document.getElementById('ddSub').textContent = App.fmtDateLong(r.date_heure) + ' à ' + App.fmtTime(r.date_heure);
+        const prat = state.praticiens[r.praticien];
+        document.getElementById('ddInfo').innerHTML = `
+            <dt>Durée</dt><dd>${r.duree} min</dd>
+            <dt>Type</dt><dd>${App.esc(App.RDV_TYPES[r.type_consultation] || '—')}</dd>
+            <dt>Praticien</dt><dd>${prat ? 'Dr ' + App.esc(prat) : '—'}</dd>
+            <dt>Motif</dt><dd>${App.esc(r.motif || '—')}</dd>`;
+        document.getElementById('statusChoices').innerHTML = Object.entries(App.RDV_STATUTS).map(([k, v]) =>
+            `<label class="choice"><input type="radio" name="statut" value="${k}"${k === r.statut ? ' checked' : ''}><span>${App.esc(v.label)}</span></label>`).join('');
+        App.openDialog('detailDialog');
+    });
+    statusForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const statut = new FormData(statusForm).get('statut');
+        const r = state.current;
+        if (!r || statut === r.statut) { document.getElementById('detailDialog').close(); return; }
+        await App.withBusy(statusForm.querySelector('[type=submit]'), async () => {
+            try {
+                const updated = await App.api(`/api/v1/rdv/${r.id}/`, { method: 'PATCH', body: { statut } });
+                Object.assign(r, updated);
+                document.getElementById('detailDialog').close();
+                App.toast(`Statut : ${App.RDV_STATUTS[statut].label}.`);
+                render();
+            } catch (err) { App.showFormError(statusForm, err.message); }
+        });
+    });
+
+    loadAll().then(() => {
+        if (new URLSearchParams(location.search).has('new')) { document.getElementById('newBtn').click(); history.replaceState(null, '', location.pathname); }
+    });
+{% endblock %}

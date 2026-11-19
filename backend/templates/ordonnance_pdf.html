@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 2cm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #1c1917; }
+        .header { border-bottom: 2px solid #166534; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { color: #166534; font-size: 16pt; margin: 0 0 4px; }
+        .header p { margin: 0; color: #555; font-size: 9pt; }
+        .meta { margin-bottom: 18px; }
+        .meta table { width: 100%; }
+        .meta td { padding: 2px 0; font-size: 10pt; }
+        .meta .label { color: #666; width: 140px; }
+        h2 { font-size: 12pt; color: #166534; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+        table.lignes { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table.lignes th { background: #ecfdf5; color: #166534; text-align: left; padding: 6px 8px; font-size: 9pt; border: 1px solid #ddd; }
+        table.lignes td { padding: 6px 8px; font-size: 10pt; border: 1px solid #ddd; vertical-align: top; }
+        .signature { margin-top: 60px; text-align: right; }
+        .signature p { margin: 0; font-size: 10pt; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cabinet Médical</h1>
+        <p>Ordonnance médicale</p>
+    </div>
+
+    <div class="meta">
+        <table>
+            <tr><td class="label">Patient</td><td>{{ ordonnance.patient.nom_complet }}</td></tr>
+            <tr><td class="label">Date de naissance</td><td>{{ ordonnance.patient.date_naissance|date:"d/m/Y" }}</td></tr>
+            <tr><td class="label">Médecin prescripteur</td><td>{{ ordonnance.consultation.praticien.nom_complet }}</td></tr>
+            <tr><td class="label">Date de l'ordonnance</td><td>{{ ordonnance.date_ordonnance|date:"d/m/Y" }}</td></tr>
+        </table>
+    </div>
+
+    <h2>Prescription</h2>
+    <table class="lignes">
+        <tr>
+            <th>Médicament</th>
+            <th>Posologie</th>
+            <th>Durée</th>
+            <th>Instructions</th>
+        </tr>
+        {% for ligne in ordonnance.lignes.all %}
+        <tr>
+            <td>{{ ligne.medicament }}</td>
+            <td>{{ ligne.posologie }}</td>
+            <td>{{ ligne.duree|default:"-" }}</td>
+            <td>{{ ligne.instructions|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4">Aucun médicament renseigné.</td></tr>
+        {% endfor %}
+    </table>
+
+    <div class="signature">
+        <p>Signature et cachet du praticien</p>
+    </div>
+</body>
+</html>

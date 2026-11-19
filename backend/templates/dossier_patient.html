@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Dossier patient{% endblock %}
+{% block page %}dossier{% endblock %}
+{% block roles %}ADMIN,MEDECIN{% endblock %}
+
+{% block extra_style %}
+    .back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-weight: 600; margin-bottom: 16px; }
+    .back:hover { color: var(--text); }
+    .patient-head { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+    .patient-head .grow { flex: 1; min-width: 220px; }
+    .patient-head h1 { margin-bottom: 4px; }
+    .facts { display: flex; gap: 8px 16px; flex-wrap: wrap; color: var(--muted); font-size: .92rem; }
+    .facts span { display: inline-flex; gap: 6px; align-items: center; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+    .info-label { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+    .info-value { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .vitals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+    .vital { padding: 14px 16px; }
+    .vital .kpi-value { font-size: 1.3rem; }
+    .vital .unit { font-size: .85rem; font-weight: 600; color: var(--muted); margin-left: 3px; }
+    .vital.warn .kpi-value { color: var(--danger); }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    @media (max-width: 400px) { .charts { grid-template-columns: 1fr; } }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 26px 0 12px; }
+    details.visit { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    details.visit + details.visit { margin-top: 10px; }
+    details.visit summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 14px; padding: 14px 18px; }
+    details.visit summary::-webkit-details-marker { display: none; }
+    details.visit summary .chev { transition: transform .15s ease; color: var(--muted); }
+    details.visit[open] summary .chev { transform: rotate(90deg); }
+    details.visit summary .grow { flex: 1; min-width: 0; }
+    .visit-date { text-align: center; min-width: 52px; padding: 6px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); line-height: 1.1; }
+    .visit-date strong { display: block; font-size: 1.15rem; }
+    .visit-date span { font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+    .visit-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding: 0 18px 18px; }
+    .sub { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface-2); min-width: 0; }
+    .sub h4 { font-size: .85rem; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .kv { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: .9rem; }
+    .kv span:first-child { color: var(--muted); }
+    .sub p { margin: 0; font-size: .9rem; }
+{% endblock %}
+
+{% block content %}
+    <a class="back" href="/consultations/" id="backLink"><i data-icon="arrowLeft" data-size="18"></i>Retour</a>
+    <div id="content">
+        <div class="card card-pad"><span class="skeleton" style="display:block;height:90px"></span></div>
+    </div>
+{% endblock %}
+
+{% block script %}
+    if (document.referrer.startsWith(location.origin) && history.length > 1) {
+        document.getElementById('backLink').addEventListener('click', e => { e.preventDefault(); history.back(); });
+    } else if (App.session.role() === 'ADMIN') {
+        document.getElementById('backLink').href = '/patients/';
+    }
+
+    const num = v => (v === null || v === undefined || v === '') ? null : Number(v);
+    const imcOf = p => (num(p.poids) && num(p.taille)) ? +(num(p.poids) / ((num(p.taille) / 100) ** 2)).toFixed(1) : null;
+
+    function vitalsCard(label, value, unit, warn) {
+        return `<div class="card vital${warn ? ' warn' : ''}"><div class="kpi-label">${label}</div>
+            <div class="kpi-value">${value ?? '—'}${value != null ? `<span class="unit">${unit}</span>` : ''}</div></div>`;
+    }
+
+    function visitHtml(h, open) {
+        const c = h.consultation, d = new Date(c.date_consultation);
+        const p = (h.parametres_vitaux || [])[0];
+        const rows = p ? [
+            ['Tension', p.tension_sys && p.tension_dia ? `${p.tension_sys}/${p.tension_dia} mmHg` : null],
+            ['Fréquence cardiaque', p.frequence_cardiaque ? p.frequence_cardiaque + ' bpm' : null],
+            ['Température', p.temperature ? num(p.temperature) + ' °C' : null],
+            ['Poids', p.poids ? num(p.poids) + ' kg' : null],
+            ['Taille', p.taille ? num(p.taille) + ' cm' : null],
+            ['IMC', imcOf(p)],
+            ['SpO2', p.saturation_oxygene ? p.saturation_oxygene + ' %' : null],
+            ['Périmètre abdominal', p.perimetre_abdominal ? num(p.perimetre_abdominal) + ' cm' : null],
+        ].filter(r => r[1]) : [];
+        const vit = rows.length ? rows.map(r => `<div class="kv"><span>${r[0]}</span><strong>${App.esc(r[1])}</strong></div>`).join('') : '<p class="muted">Aucune constante.</p>';
+
+        const o = h.ordonnance;
+        const ordo = o ? `${(o.lignes || []).map(l => `<div class="kv"><span>${App.esc(l.medicament)}</span><strong>${App.esc(l.posologie)}</strong></div>`).join('')}
+            <button class="btn btn-sm btn-outline" type="button" data-pdf="ordonnance" data-id="${o.id}" style="margin-top:10px">${App.icon('download', 16)}PDF</button>`
+            : '<p class="muted">Pas d’ordonnance.</p>';
+
+        const cr = h.compte_rendu;
+        const crHtml = cr ? `<p style="white-space:pre-wrap">${App.esc((cr.contenu || '').slice(0, 220))}${(cr.contenu || '').length > 220 ? '…' : ''}</p>
+            <button class="btn btn-sm btn-outline" type="button" data-pdf="rapport" data-id="${cr.id}" style="margin-top:10px">${App.icon('download', 16)}PDF</button>`
+            : '<p class="muted">Pas de compte rendu.</p>';
+
+        const actes = (h.actes_factures || []).length
+            ? h.actes_factures.map(a => `<div class="kv"><span>${App.esc(a.acte_libelle)} ×${a.quantite}</span><strong>${App.esc(App.fmtMoney(a.montant_ligne))}</strong></div>`).join('')
+              + `<div class="kv" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span>Total</span><strong>${App.esc(App.fmtMoney(c.montant_total))}</strong></div>`
+            : '<p class="muted">Aucun acte facturé.</p>';
+
+        return `<details class="visit"${open ? ' open' : ''}>
+            <summary>
+                <span class="visit-date"><strong>${d.getDate()}</strong><span>${App.esc(d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }))}</span></span>
+                <span class="grow"><span class="person-name" style="display:block;overflow-wrap:anywhere">${App.esc(c.motif || 'Sans motif')}</span>
+                    <span class="person-sub">${App.esc(App.fmtTime(c.date_consultation))}${c.duree_effective ? ' · ' + c.duree_effective + ' min' : ''}${o ? ' · ordonnance' : ''}${cr ? ' · compte rendu' : ''}</span></span>
+                ${App.badge(App.PAIEMENT, c.statut_paiement)}
+                <span class="chev">${App.icon('chevronRight', 18)}</span>
+            </summary>
+            <div class="visit-body">
+                <div class="sub"><h4>${App.icon('activity', 16)}Constantes</h4>${vit}</div>
+                <div class="sub"><h4>${App.icon('pill', 16)}Ordonnance</h4>${ordo}</div>
+                <div class="sub"><h4>${App.icon('file', 16)}Compte rendu</h4>${crHtml}</div>
+                <div class="sub"><h4>${App.icon('wallet', 16)}Actes facturés</h4>${actes}</div>
+            </div>
+        </details>`;
+    }
+
+    async function loadDossier() {
+        const content = document.getElementById('content');
+        const m = location.pathname.match(/\/patients\/(\d+)\//);
+        if (!m) { content.innerHTML = `<div class="card">${App.emptyState('Patient introuvable', '', 'alert')}</div>`; return; }
+        let data;
+        try { data = await App.api(`/api/v1/patients/${m[1]}/dossier/`); }
+        catch (e) { content.innerHTML = `<div class="card">${App.emptyState(e.status === 404 ? 'Patient introuvable' : 'Impossible d’ouvrir le dossier', e.message, 'alert')}</div>`; return; }
+
+        const p = data.patient, hist = data.historique || [];
+        document.title = `${p.nom_complet} · Cabinet médical`;
+
+        // Toutes les mesures, de la plus ancienne à la plus récente.
+        const mesures = hist.flatMap(h => (h.parametres_vitaux || []).map(v => ({ ...v, x: new Date(v.date_mesure || h.consultation.date_consultation) })))
+            .sort((a, b) => a.x - b.x);
+        const last = mesures[mesures.length - 1] || {};
+        const lastOf = key => { for (let i = mesures.length - 1; i >= 0; i--) if (num(mesures[i][key]) != null) return num(mesures[i][key]); return null; };
+        const sys = lastOf('tension_sys'), dia = lastOf('tension_dia');
+        const lastImc = (() => { for (let i = mesures.length - 1; i >= 0; i--) { const v = imcOf(mesures[i]); if (v) return v; } return null; })();
+        const sat = lastOf('saturation_oxygene'), temp = lastOf('temperature');
+
+        const series = key => mesures.filter(v => num(v[key]) != null).map(v => ({ x: v.x, y: num(v[key]) }));
+
+        content.innerHTML = `
+            <section class="card card-pad">
+                <div class="patient-head">
+                    <span class="avatar lg">${App.esc(App.initials(p.nom_complet))}</span>
+                    <div class="grow">
+                        <h1>${App.esc(p.nom)} ${App.esc(p.prenom)}</h1>
+                        <div class="facts">
+                            <span>${p.age} ans · ${p.sexe === 'F' ? 'Femme' : 'Homme'}</span>
+                            <span>Né(e) le ${App.esc(App.fmtDate(p.date_naissance))}</span>
+                            ${p.groupe_sanguin ? `<span>${App.icon('heart', 16)}Groupe ${App.esc(p.groupe_sanguin)}</span>` : ''}
+                            ${p.telephone ? `<span><a href="tel:${App.esc(p.telephone)}" style="color:inherit;text-decoration:none">${App.esc(p.telephone)}</a></span>` : ''}
+                        </div>
+                    </div>
+                    ${App.badge(App.PATIENT_STATUTS, p.statut)}
+                </div>
+                ${p.allergies ? `<div class="alert danger" style="margin-top:18px">${App.icon('alert', 20)}<div><strong>Allergies :</strong> ${App.esc(p.allergies)}</div></div>` : ''}
+                <div class="info-grid">
+                    <div><div class="info-label">Antécédents</div><div class="info-value">${App.esc(p.antecedents || '—')}</div></div>
+                    <div><div class="info-label">Contact</div><div class="info-value">${App.esc([p.email, p.adresse].filter(Boolean).join('\n') || '—')}</div></div>
+                    <div><div class="info-label">Médecin traitant</div><div class="info-value">${p.medecin_traitant_detail ? 'Dr ' + App.esc(p.medecin_traitant_detail.nom) : '—'}</div></div>
+                    ${p.allergies ? '' : '<div><div class="info-label">Allergies</div><div class="info-value">Aucune connue</div></div>'}
+                </div>
+            </section>
+
+            <div class="section-title"><h2>Dernières constantes</h2>${last.x ? `<span class="muted small">mesurées le ${App.esc(App.fmtDate(last.x))}</span>` : ''}</div>
+            <div class="vitals">
+                ${vitalsCard('Tension', sys && dia ? `${sys}/${dia}` : null, 'mmHg', sys >= 140 || dia >= 90)}
+                ${vitalsCard('Fréq. cardiaque', lastOf('frequence_cardiaque'), 'bpm')}
+                ${vitalsCard('Température', temp, '°C', temp >= 38)}
+                ${vitalsCard('Poids', lastOf('poids'), 'kg')}
+                ${vitalsCard('IMC', lastImc, 'kg/m²', lastImc >= 30)}
+                ${vitalsCard('SpO2', sat, '%', sat != null && sat < 95)}
+            </div>
+
+            <div class="section-title"><h2>Évolution</h2></div>
+            <div class="charts">
+                <section class="card"><div class="card-head"><h3>Poids (kg)</h3></div><div class="card-body">${App.lineChart([{ name: 'Poids', color: 'var(--primary)', points: series('poids') }], { unit: 'kg' })}</div></section>
+                <section class="card"><div class="card-head"><h3>Tension (mmHg)</h3></div><div class="card-body">${App.lineChart([
+                    { name: 'Systolique', color: 'var(--danger)', points: series('tension_sys') },
+                    { name: 'Diastolique', color: 'var(--info)', points: series('tension_dia') },
+                ], { unit: 'mmHg' })}</div></section>
+            </div>
+
+            <div class="section-title"><h2>Historique des consultations</h2><span class="muted small">${hist.length} consultation${hist.length > 1 ? 's' : ''}</span></div>
+            ${hist.length ? hist.map((h, i) => visitHtml(h, i === 0)).join('') : `<div class="card">${App.emptyState('Aucune consultation', 'L’historique apparaîtra ici après la première consultation.', 'stethoscope')}</div>`}
+        `;
+    }
+
+    document.addEventListener('click', async e => {
+        const b = e.target.closest('[data-pdf]'); if (!b) return;
+        const kind = b.dataset.pdf, id = b.dataset.id;
+        const path = kind === 'ordonnance' ? `/api/v1/ordonnances/${id}/pdf/` : `/api/v1/comptes-rendus/${id}/pdf/`;
+        b.disabled = true;
+        try { await App.download(path, `${kind === 'ordonnance' ? 'ordonnance' : 'compte_rendu'}_${id}.pdf`); }
+        catch (err) { App.toast(err.message, 'error'); }
+        finally { b.disabled = false; }
+    });
+
+    loadDossier();
+{% endblock %}

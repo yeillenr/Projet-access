@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% comment %}
+    Surcharge du gabarit de l'administration Django : ajoute un bouton bien visible
+    pour revenir au site de gestion du cabinet.
+{% endcomment %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | Administration · Cabinet médical{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+    #header { align-items: center; }
+    #branding { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .back-to-app {
+        display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px;
+        background: #ffffff; color: #0f766e !important; font-weight: 700; font-size: .9rem; text-decoration: none !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,.15); transition: background .15s ease, transform .05s ease; white-space: nowrap;
+    }
+    .back-to-app:hover { background: #e6f4f2; }
+    .back-to-app:active { transform: translateY(1px); }
+    .back-to-app svg { flex-shrink: 0; }
+    @media (max-width: 767px) { #branding { gap: 10px; } .back-to-app { padding: 7px 12px; } }
+</style>
+{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">Administration du cabinet</a></div>
+<a class="back-to-app" href="/" title="Revenir au site de gestion médicale">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    Retour au cabinet
+</a>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}

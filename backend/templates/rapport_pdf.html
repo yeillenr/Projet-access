@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 2cm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #1c1917; }
+        .header { border-bottom: 2px solid #166534; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { color: #166534; font-size: 16pt; margin: 0 0 4px; }
+        .header p { margin: 0; color: #555; font-size: 9pt; }
+        .meta { margin-bottom: 18px; }
+        .meta table { width: 100%; }
+        .meta td { padding: 2px 0; font-size: 10pt; }
+        .meta .label { color: #666; width: 140px; }
+        h2 { font-size: 12pt; color: #166534; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+        .contenu { font-size: 10.5pt; line-height: 1.5; margin-top: 10px; }
+        .signature { margin-top: 60px; text-align: right; }
+        .signature p { margin: 0; font-size: 10pt; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cabinet Médical</h1>
+        <p>Compte rendu médical</p>
+    </div>
+
+    <div class="meta">
+        <table>
+            <tr><td class="label">Patient</td><td>{{ rapport.patient.nom_complet }}</td></tr>
+            <tr><td class="label">Date de naissance</td><td>{{ rapport.patient.date_naissance|date:"d/m/Y" }}</td></tr>
+            <tr><td class="label">Médecin</td><td>{{ rapport.consultation.praticien.nom_complet }}</td></tr>
+            <tr><td class="label">Motif de consultation</td><td>{{ rapport.consultation.motif|default:"-" }}</td></tr>
+            <tr><td class="label">Date du compte rendu</td><td>{{ rapport.date_redaction|date:"d/m/Y" }}</td></tr>
+        </table>
+    </div>
+
+    <h2>Contenu</h2>
+    <div class="contenu">{{ rapport.contenu|linebreaks }}</div>
+
+    <div class="signature">
+        <p>Signature et cachet du praticien</p>
+    </div>
+</body>
+</html>

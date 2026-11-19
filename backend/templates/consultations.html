@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Consultations{% endblock %}
+{% block page %}consultations{% endblock %}
+{% block roles %}ADMIN,MEDECIN{% endblock %}
+
+{% block extra_style %}
+    .consult { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 16px clamp(16px, 2.5vw, 22px); border-bottom: 1px solid var(--border); }
+    .consult:last-child { border-bottom: 0; }
+    .consult-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .consult-motif { margin: 4px 0 10px; color: var(--text); overflow-wrap: anywhere; }
+    .consult-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .consult-side { text-align: right; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+    .consult-side strong { font-variant-numeric: tabular-nums; }
+    .btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    @media (max-width: 640px) {
+        .consult { grid-template-columns: auto minmax(0, 1fr); }
+        .consult-side { grid-column: 2; flex-direction: row; align-items: center; text-align: left; order: -1; }
+        .consult-actions .btn { flex: 1 1 auto; }
+    }
+    .ligne { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+    .ligne + .ligne { margin-top: 10px; }
+    @media (max-width: 640px) { .ligne { grid-template-columns: 1fr 1fr; } .ligne .field:first-child { grid-column: 1 / -1; } }
+    .doc-preview { white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; max-height: 50vh; overflow: auto; }
+    .med-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .med-list li { padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Consultations</h1>
+            <p>Consultations récentes, ordonnances et comptes rendus.</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn" type="button" id="newBtn"><i data-icon="plus" data-size="18"></i>Nouvelle consultation</button>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="input-icon grow">
+            <span class="sr-only">Rechercher</span>
+            <i data-icon="search" data-size="18"></i>
+            <input type="search" id="search" placeholder="Rechercher un patient ou un motif…" autocomplete="off">
+        </label>
+    </div>
+
+    <section class="card">
+        <div id="list"><div class="card-body"><span class="skeleton" style="display:block;height:80px"></span></div></div>
+        <div style="padding:12px;text-align:center;border-top:1px solid var(--border)" id="moreBox" hidden>
+            <button class="btn btn-outline btn-sm" type="button" id="moreBtn">Afficher plus</button>
+        </div>
+    </section>
+
+    <!-- Nouvelle consultation -->
+    <dialog class="sheet" id="consultDialog" aria-labelledby="cdTitle">
+        <form id="consultForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="cdTitle">Nouvelle consultation</h2><p>Elle sera datée d'aujourd'hui.</p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div class="form-section">
+                    <div class="field">
+                        <label class="req" for="cPatientSearch">Patient</label>
+                        <input id="cPatientSearch" type="search" placeholder="Filtrer la liste par nom…" autocomplete="off">
+                        <select id="cPatient" name="patient" size="5" required style="min-height:150px"></select>
+                    </div>
+                    <div class="field"><label class="req" for="cMotif">Motif de consultation</label><textarea id="cMotif" name="motif" rows="3" placeholder="Ex. fièvre depuis 3 jours, céphalées…" required></textarea></div>
+                    <div class="field" style="max-width:220px"><label for="cDuree">Durée (minutes)</label><input id="cDuree" name="duree_effective" type="number" min="5" max="180" step="5" value="20" inputmode="numeric"></div>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot">
+                <button class="btn btn-ghost" type="button" data-close>Annuler</button>
+                <button class="btn" type="submit">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Ordonnance -->
+    <dialog class="sheet" id="ordoDialog" aria-labelledby="odTitle">
+        <form id="ordoForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="odTitle">Ordonnance</h2><p id="odSub"></p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div id="ordoView" hidden></div>
+                <div id="ordoEdit">
+                    <div id="lignes"></div>
+                    <button class="btn btn-soft btn-sm" type="button" id="addLigne" style="margin-top:12px"><i data-icon="plus" data-size="16"></i>Ajouter un médicament</button>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot" id="ordoFoot"></div>
+        </form>
+    </dialog>
+
+    <!-- Compte rendu -->
+    <dialog class="sheet" id="crDialog" aria-labelledby="crTitle">
+        <form id="crForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="crTitle">Compte rendu</h2><p id="crSub"></p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div id="crView" class="doc-preview" hidden></div>
+                <div id="crEdit" class="field">
+                    <div class="row" style="justify-content:space-between">
+                        <label for="crContenu" class="req">Contenu</label>
+                        <button class="btn btn-soft btn-sm" type="button" id="crTemplate">Utiliser le modèle structuré</button>
+                    </div>
+                    <textarea id="crContenu" rows="14" style="min-height:280px" placeholder="Motif, examen clinique, diagnostic, conduite à tenir…"></textarea>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot" id="crFoot"></div>
+        </form>
+    </dialog>
+{% endblock %}
+
+{% block script %}
+    const state = { consultations: [], next: null, ordos: {}, crs: {}, patients: [], filter: '', current: null };
+    const role = App.session.role();
+
+    function consultHtml(c) {
+        const o = state.ordos[c.id], cr = state.crs[c.id];
+        return `<article class="consult" data-id="${c.id}">
+            <span class="avatar">${App.esc(App.initials(c.patient_nom))}</span>
+            <div style="min-width:0">
+                <div class="consult-top"><span class="person-name">${App.esc(c.patient_nom || 'Patient')}</span><span class="muted small">${App.esc(App.fmtDateTime(c.date_consultation))}${c.duree_effective ? ' · ' + c.duree_effective + ' min' : ''}</span></div>
+                <p class="consult-motif">${App.esc(c.motif || 'Sans motif')}</p>
+                <div class="consult-actions">
+                    <button class="btn btn-sm ${o ? 'btn-outline' : 'btn-soft'}" type="button" data-action="ordo">${o ? '<span class="dot"></span>' : App.icon('plus', 16)}Ordonnance</button>
+                    <button class="btn btn-sm ${cr ? 'btn-outline' : 'btn-soft'}" type="button" data-action="cr">${cr ? '<span class="dot"></span>' : App.icon('plus', 16)}Compte rendu</button>
+                    <a class="btn btn-sm btn-ghost" href="/patients/${c.patient}/">${App.icon('folder', 16)}Dossier</a>
+                </div>
+            </div>
+            <div class="consult-side">
+                <strong>${App.esc(App.fmtMoney(c.montant_total))}</strong>
+                ${App.badge(App.PAIEMENT, c.statut_paiement)}
+            </div>
+        </article>`;
+    }
+
+    function render() {
+        const f = state.filter.toLowerCase();
+        const list = state.consultations.filter(c => !f || `${c.patient_nom} ${c.motif}`.toLowerCase().includes(f));
+        document.getElementById('list').innerHTML = list.length
+            ? list.map(consultHtml).join('')
+            : f ? App.emptyState('Aucun résultat', 'Aucune consultation chargée ne correspond à cette recherche.', 'search')
+                : App.emptyState('Aucune consultation', 'Cliquez sur « Nouvelle consultation » pour commencer.', 'stethoscope');
+        document.getElementById('moreBox').hidden = !state.next;
+    }
+
+    async function loadDocs() {
+        const [ordos, crs] = await Promise.all([
+            App.fetchAll('/api/v1/ordonnances/').catch(() => []),
+            App.fetchAll('/api/v1/comptes-rendus/').catch(() => []),
+        ]);
+        state.ordos = Object.fromEntries(ordos.map(o => [o.consultation, o]));
+        state.crs = Object.fromEntries(crs.map(c => [c.consultation, c]));
+    }
+
+    async function load(append = false) {
+        try {
+            const data = await App.api(append ? state.next : '/api/v1/consultations/');
+            const rows = data.results || data;
+            state.consultations = append ? state.consultations.concat(rows) : rows;
+            state.next = data.next || null;
+            render();
+        } catch (e) {
+            document.getElementById('list').innerHTML = App.emptyState('Impossible de charger les consultations', e.message, 'alert');
+        }
+    }
+
+    document.getElementById('search').addEventListener('input', App.debounce(e => { state.filter = e.target.value.trim(); render(); }, 200));
+    document.getElementById('moreBtn').addEventListener('click', () => load(true));
+    document.getElementById('list').addEventListener('click', e => {
+        const btn = e.target.closest('[data-action]'); if (!btn) return;
+        const c = state.consultations.find(x => x.id === Number(btn.closest('.consult').dataset.id));
+        state.current = c;
+        if (btn.dataset.action === 'ordo') openOrdo(c); else openCr(c);
+    });
+
+    /* ---------- Nouvelle consultation ---------- */
+    const consultForm = document.getElementById('consultForm');
+    function fillPatients(filter = '') {
+        const f = filter.toLowerCase();
+        const list = state.patients.filter(p => !f || `${p.nom} ${p.prenom}`.toLowerCase().includes(f));
+        document.getElementById('cPatient').innerHTML = list.length
+            ? list.map(p => `<option value="${p.id}">${App.esc(p.nom)} ${App.esc(p.prenom)} — ${App.esc(App.fmtDate(p.date_naissance))}</option>`).join('')
+            : '<option value="" disabled>Aucun patient ne correspond</option>';
+    }
+    document.getElementById('cPatientSearch').addEventListener('input', e => fillPatients(e.target.value));
+    document.getElementById('newBtn').addEventListener('click', async () => {
+        consultForm.reset();
+        if (!state.patients.length) state.patients = await App.fetchAll('/api/v1/patients/?statut=ACTIF').catch(() => []);
+        fillPatients();
+        App.openDialog('consultDialog');
+    });
+    consultForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const payload = {
+            patient: consultForm.patient.value,
+            motif: consultForm.motif.value.trim(),
+            duree_effective: Number(consultForm.duree_effective.value) || null,
+        };
+        // Un médecin connecté devient automatiquement le praticien de la consultation.
+        if (role === 'MEDECIN' && App.session.id()) payload.praticien = App.session.id();
+        if (!payload.patient) return App.showFormError(consultForm, 'Sélectionnez un patient dans la liste.');
+        if (!payload.motif) return App.showFormError(consultForm, 'Le motif de consultation est obligatoire.');
+        await App.withBusy(consultForm.querySelector('[type=submit]'), async () => {
+            try {
+                await App.api('/api/v1/consultations/', { method: 'POST', body: payload });
+                document.getElementById('consultDialog').close();
+                App.toast('Consultation enregistrée.');
+                load();
+            } catch (err) { App.showFormError(consultForm, err.message); }
+        });
+    });
+
+    /* ---------- Ordonnance ---------- */
+    const ordoForm = document.getElementById('ordoForm');
+    function addLigne() {
+        const div = document.createElement('div');
+        div.className = 'ligne';
+        div.innerHTML = `
+            <div class="field"><label>Médicament</label><input class="l-med" placeholder="Ex. Paracétamol 500 mg"></div>
+            <div class="field"><label>Posologie</label><input class="l-poso" placeholder="Ex. 1 cp 3×/jour"></div>
+            <div class="field"><label>Durée</label><input class="l-duree" placeholder="Ex. 5 jours"></div>
+            <button class="icon-btn" type="button" data-remove aria-label="Retirer ce médicament">${App.icon('trash', 18)}</button>`;
+        document.getElementById('lignes').appendChild(div);
+        div.querySelector('input').focus();
+    }
+    document.getElementById('addLigne').addEventListener('click', addLigne);
+    document.getElementById('lignes').addEventListener('click', e => {
+        const rm = e.target.closest('[data-remove]'); if (!rm) return;
+        const all = document.querySelectorAll('#lignes .ligne');
+        if (all.length > 1) rm.closest('.ligne').remove();
+        else rm.closest('.ligne').querySelectorAll('input').forEach(i => i.value = '');
+    });
+
+    function openOrdo(c) {
+        const o = state.ordos[c.id];
+        document.getElementById('odSub').textContent = `${c.patient_nom} · ${App.fmtDate(c.date_consultation)}`;
+        const view = document.getElementById('ordoView'), edit = document.getElementById('ordoEdit'), foot = document.getElementById('ordoFoot');
+        if (o) {
+            view.hidden = false; edit.hidden = true;
+            view.innerHTML = `<ul class="med-list">${(o.lignes || []).map(l => `<li><strong>${App.esc(l.medicament)}</strong><div class="muted small">${App.esc(l.posologie)}${l.duree ? ' · ' + App.esc(l.duree) : ''}</div></li>`).join('')}</ul>`;
+            foot.innerHTML = `<button class="btn btn-ghost" type="button" data-close>Fermer</button>
+                <button class="btn" type="button" data-pdf="ordonnance" data-id="${o.id}">${App.icon('download', 18)}Télécharger le PDF</button>`;
+        } else {
+            view.hidden = true; edit.hidden = false;
+            document.getElementById('lignes').innerHTML = '';
+            foot.innerHTML = `<button class="btn btn-ghost" type="button" data-close>Annuler</button><button class="btn" type="submit">Créer l'ordonnance</button>`;
+        }
+        App.openDialog('ordoDialog');
+        if (!o) addLigne();
+    }
+    ordoForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const c = state.current;
+        const lignes = [...document.querySelectorAll('#lignes .ligne')].map(l => ({
+            medicament: l.querySelector('.l-med').value.trim(),
+            posologie: l.querySelector('.l-poso').value.trim(),
+            duree: l.querySelector('.l-duree').value.trim(),
+        })).filter(l => l.medicament);
+        if (!lignes.length) return App.showFormError(ordoForm, 'Ajoutez au moins un médicament.');
+        if (lignes.some(l => !l.posologie)) return App.showFormError(ordoForm, 'Indiquez la posologie de chaque médicament.');
+        await App.withBusy(ordoForm.querySelector('[type=submit]'), async () => {
+            try {
+                const o = await App.api('/api/v1/ordonnances/', { method: 'POST', body: { patient: c.patient, consultation: c.id, lignes } });
+                state.ordos[c.id] = o;
+                App.toast('Ordonnance créée.');
+                render(); openOrdo(c);
+            } catch (err) { App.showFormError(ordoForm, err.message); }
+        });
+    });
+
+    /* ---------- Compte rendu ---------- */
+    const crForm = document.getElementById('crForm');
+    const CR_TEMPLATE = 'MOTIF DE CONSULTATION\n\n\nEXAMEN CLINIQUE\n\n\nDIAGNOSTIC\n\n\nCONDUITE À TENIR\n';
+    document.getElementById('crTemplate').addEventListener('click', () => {
+        const ta = document.getElementById('crContenu');
+        if (ta.value.trim() && !ta.value.includes('MOTIF DE CONSULTATION')) ta.value += '\n\n' + CR_TEMPLATE;
+        else if (!ta.value.trim()) ta.value = CR_TEMPLATE.replace('MOTIF DE CONSULTATION\n\n', 'MOTIF DE CONSULTATION\n' + (state.current?.motif || '') + '\n');
+        ta.focus();
+    });
+    function openCr(c) {
+        const cr = state.crs[c.id];
+        document.getElementById('crSub').textContent = `${c.patient_nom} · ${App.fmtDate(c.date_consultation)}`;
+        const view = document.getElementById('crView'), edit = document.getElementById('crEdit'), foot = document.getElementById('crFoot');
+        if (cr) {
+            view.hidden = false; edit.hidden = true;
+            view.textContent = cr.contenu;
+            foot.innerHTML = `<button class="btn btn-ghost" type="button" data-close>Fermer</button>
+                <button class="btn" type="button" data-pdf="rapport" data-id="${cr.id}">${App.icon('download', 18)}Télécharger le PDF</button>`;
+        } else {
+            view.hidden = true; edit.hidden = false;
+            document.getElementById('crContenu').value = '';
+            foot.innerHTML = `<button class="btn btn-ghost" type="button" data-close>Annuler</button><button class="btn" type="submit">Enregistrer le compte rendu</button>`;
+        }
+        App.openDialog('crDialog');
+    }
+    crForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const c = state.current;
+        const contenu = document.getElementById('crContenu').value.trim();
+        if (!contenu) return App.showFormError(crForm, 'Le compte rendu est vide.');
+        await App.withBusy(crForm.querySelector('[type=submit]'), async () => {
+            try {
+                const cr = await App.api('/api/v1/comptes-rendus/', { method: 'POST', body: { patient: c.patient, consultation: c.id, contenu } });
+                state.crs[c.id] = cr;
+                App.toast('Compte rendu enregistré.');
+                render(); openCr(c);
+            } catch (err) { App.showFormError(crForm, err.message); }
+        });
+    });
+
+    /* ---------- PDF ---------- */
+    document.addEventListener('click', async e => {
+        const b = e.target.closest('[data-pdf]'); if (!b) return;
+        const kind = b.dataset.pdf, id = b.dataset.id;
+        const path = kind === 'ordonnance' ? `/api/v1/ordonnances/${id}/pdf/` : `/api/v1/comptes-rendus/${id}/pdf/`;
+        b.disabled = true;
+        try { await App.download(path, `${kind === 'ordonnance' ? 'ordonnance' : 'compte_rendu'}_${id}.pdf`); }
+        catch (err) { App.toast(err.message, 'error'); }
+        finally { b.disabled = false; }
+    });
+
+    loadDocs().finally(() => load().then(() => {
+        if (new URLSearchParams(location.search).has('new')) { document.getElementById('newBtn').click(); history.replaceState(null, '', location.pathname); }
+    }));
+{% endblock %}

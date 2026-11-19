@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Patients{% endblock %}
+{% block page %}patients{% endblock %}
+{% block roles %}ADMIN,SECRETAIRE{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Patients</h1>
+            <p id="headSub">Recherchez, consultez et enregistrez les dossiers.</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn" type="button" id="newBtn"><i data-icon="plus" data-size="18"></i>Nouveau patient</button>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="input-icon grow">
+            <span class="sr-only">Rechercher un patient</span>
+            <i data-icon="search" data-size="18"></i>
+            <input type="search" id="search" placeholder="Nom, prénom, téléphone ou email…" autocomplete="off">
+        </label>
+        <div class="segmented" id="statusFilter" role="group" aria-label="Filtrer par statut">
+            <button type="button" data-statut="" aria-pressed="true">Tous <span class="count" data-count=""></span></button>
+            <button type="button" data-statut="ACTIF" aria-pressed="false">Actifs <span class="count" data-count="ACTIF"></span></button>
+            <button type="button" data-statut="INACTIF" aria-pressed="false">Inactifs <span class="count" data-count="INACTIF"></span></button>
+            <button type="button" data-statut="DECEDE" aria-pressed="false">Décédés <span class="count" data-count="DECEDE"></span></button>
+        </div>
+    </div>
+
+    <section class="card">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Patient</th><th>Naissance</th><th>Sexe</th><th>Téléphone</th><th>Statut</th><th></th></tr></thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+        <div id="emptyBox"></div>
+        <div style="padding:12px;text-align:center" id="moreBox" hidden>
+            <button class="btn btn-outline btn-sm" type="button" id="moreBtn">Afficher plus</button>
+        </div>
+    </section>
+
+    <!-- Nouveau patient -->
+    <dialog class="sheet" id="patientDialog" aria-labelledby="pdTitle">
+        <form id="patientForm" novalidate>
+            <div class="sheet-head">
+                <div><h2 id="pdTitle">Nouveau patient</h2><p>Les champs marqués d'un * sont obligatoires.</p></div>
+                <button class="icon-btn" type="button" data-close aria-label="Fermer"><i data-icon="x" data-size="18"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div class="form-section">
+                    <div class="form-section-title">Identité</div>
+                    <div class="form-grid">
+                        <div class="field"><label class="req" for="fNom">Nom</label><input id="fNom" name="nom" autocomplete="off" required></div>
+                        <div class="field"><label class="req" for="fPrenom">Prénom</label><input id="fPrenom" name="prenom" autocomplete="off" required></div>
+                        <div class="field"><label class="req" for="fNaiss">Date de naissance</label><input id="fNaiss" name="date_naissance" type="date" required></div>
+                        <div class="field">
+                            <span class="field-label req">Sexe</span>
+                            <div class="choice-group">
+                                <label class="choice"><input type="radio" name="sexe" value="M" checked><span>Masculin</span></label>
+                                <label class="choice"><input type="radio" name="sexe" value="F"><span>Féminin</span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <div class="form-section-title">Coordonnées</div>
+                    <div class="form-grid">
+                        <div class="field"><label for="fTel">Téléphone</label><input id="fTel" name="telephone" type="tel" inputmode="tel" autocomplete="off"></div>
+                        <div class="field"><label for="fEmail">Email</label><input id="fEmail" name="email" type="email" autocomplete="off"></div>
+                        <div class="field span-2"><label for="fAdr">Adresse</label><textarea id="fAdr" name="adresse" rows="2" style="min-height:64px"></textarea></div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <div class="form-section-title">Informations médicales</div>
+                    <div class="form-grid">
+                        <div class="field"><label for="fGroupe">Groupe sanguin</label>
+                            <select id="fGroupe" name="groupe_sanguin">
+                                <option value="">Non renseigné</option>
+                                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+                            </select>
+                        </div>
+                        <div class="field"><label for="fStatut">Statut</label>
+                            <select id="fStatut" name="statut"><option value="ACTIF">Actif</option><option value="INACTIF">Inactif</option><option value="DECEDE">Décédé</option></select>
+                        </div>
+                        <div class="field span-2"><label for="fAll">Allergies</label><textarea id="fAll" name="allergies" rows="2" style="min-height:64px" placeholder="Ex. pénicilline, arachides… Laisser vide si aucune."></textarea></div>
+                        <div class="field span-2"><label for="fAnt">Antécédents</label><textarea id="fAnt" name="antecedents" rows="3" placeholder="Antécédents médicaux, chirurgicaux, familiaux…"></textarea></div>
+                    </div>
+                </div>
+                <div class="form-error" hidden style="margin-top:16px"></div>
+            </div>
+            <div class="sheet-foot">
+                <button class="btn btn-ghost" type="button" data-close>Annuler</button>
+                <button class="btn" type="submit">Enregistrer le patient</button>
+            </div>
+        </form>
+    </dialog>
+{% endblock %}
+
+{% block script %}
+    const isAdmin = App.session.role() === 'ADMIN';
+    const state = { search: '', statut: '', next: null };
+    const rowsEl = document.getElementById('rows');
+
+    function rowHtml(p) {
+        const age = p.age ?? App.ageFrom(p.date_naissance);
+        const link = isAdmin ? `<a class="btn btn-sm btn-soft" href="/patients/${p.id}/">Dossier</a>` : '';
+        return `<tr${isAdmin ? ` class="clickable" data-href="/patients/${p.id}/"` : ''}>
+            <td class="cell-main"><div class="person"><span class="avatar">${App.esc(App.initials(p.nom_complet))}</span>
+                <div style="min-width:0"><div class="person-name">${App.esc(p.nom)} ${App.esc(p.prenom)}</div><div class="person-sub">${App.esc(p.email || 'Pas d’email')}</div></div></div></td>
+            <td data-label="Naissance"><span>${App.esc(App.fmtDate(p.date_naissance))} <span class="muted small">· ${age} ans</span></span></td>
+            <td data-label="Sexe"><span>${p.sexe === 'F' ? 'Féminin' : 'Masculin'}</span></td>
+            <td data-label="Téléphone">${p.telephone ? `<a href="tel:${App.esc(p.telephone)}" style="color:inherit;text-decoration:none">${App.esc(p.telephone)}</a>` : '<span class="muted">—</span>'}</td>
+            <td data-label="Statut">${App.badge(App.PATIENT_STATUTS, p.statut)}</td>
+            <td style="text-align:right">${link}</td>
+        </tr>`;
+    }
+
+    function skeletonRows() {
+        rowsEl.innerHTML = Array.from({ length: 5 }, () => `<tr><td colspan="6"><span class="skeleton" style="display:block;height:36px"></span></td></tr>`).join('');
+    }
+
+    function buildQuery() {
+        const q = new URLSearchParams();
+        if (state.search) q.set('search', state.search);
+        if (state.statut) q.set('statut', state.statut);
+        return '/api/v1/patients/' + (q.toString() ? '?' + q : '');
+    }
+
+    async function load(append = false) {
+        const emptyBox = document.getElementById('emptyBox');
+        if (!append) { skeletonRows(); emptyBox.innerHTML = ''; }
+        try {
+            const data = await App.api(append ? state.next : buildQuery());
+            const list = data.results || data;
+            state.next = data.next || null;
+            const html = list.map(rowHtml).join('');
+            if (append) rowsEl.insertAdjacentHTML('beforeend', html); else rowsEl.innerHTML = html;
+            document.getElementById('moreBox').hidden = !state.next;
+            if (!append && !list.length) {
+                emptyBox.innerHTML = state.search || state.statut
+                    ? App.emptyState('Aucun patient trouvé', 'Essayez avec un autre nom ou retirez le filtre.', 'search')
+                    : App.emptyState('Aucun patient pour l’instant', 'Cliquez sur « Nouveau patient » pour créer le premier dossier.', 'users');
+            }
+        } catch (e) {
+            rowsEl.innerHTML = '';
+            emptyBox.innerHTML = App.emptyState('Impossible de charger les patients', e.message, 'alert');
+        }
+    }
+
+    async function loadCounts() {
+        const statuts = ['', 'ACTIF', 'INACTIF', 'DECEDE'];
+        const counts = await Promise.all(statuts.map(s =>
+            App.api('/api/v1/patients/' + (s ? '?statut=' + s : '')).then(d => d.count ?? (d.length || 0)).catch(() => null)));
+        statuts.forEach((s, i) => {
+            const el = document.querySelector(`[data-count="${s}"]`);
+            if (el) el.textContent = counts[i] ?? '';
+        });
+        if (counts[0] != null) document.getElementById('headSub').textContent = `${counts[0]} dossier${counts[0] > 1 ? 's' : ''} · ${counts[1] ?? 0} actif${counts[1] > 1 ? 's' : ''}`;
+    }
+
+    document.getElementById('search').addEventListener('input', App.debounce(e => { state.search = e.target.value.trim(); load(); }, 300));
+    document.getElementById('statusFilter').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        document.querySelectorAll('#statusFilter button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        state.statut = b.dataset.statut; load();
+    });
+    document.getElementById('moreBtn').addEventListener('click', () => load(true));
+    rowsEl.addEventListener('click', e => {
+        if (e.target.closest('a')) return;
+        const tr = e.target.closest('tr[data-href]'); if (tr) location.href = tr.dataset.href;
+    });
+
+    // Création
+    const form = document.getElementById('patientForm');
+    document.getElementById('newBtn').addEventListener('click', () => { form.reset(); App.openDialog('patientDialog'); });
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(form).entries());
+        Object.keys(payload).forEach(k => payload[k] = typeof payload[k] === 'string' ? payload[k].trim() : payload[k]);
+        if (!payload.nom || !payload.prenom || !payload.date_naissance) {
+            App.showFormError(form, 'Le nom, le prénom et la date de naissance sont obligatoires.'); return;
+        }
+        if (payload.date_naissance > App.isoDate(new Date())) {
+            App.showFormError(form, 'La date de naissance ne peut pas être dans le futur.'); return;
+        }
+        await App.withBusy(form.querySelector('[type=submit]'), async () => {
+            try {
+                await App.api('/api/v1/patients/', { method: 'POST', body: payload });
+                document.getElementById('patientDialog').close();
+                App.toast(`Dossier de ${payload.prenom} ${payload.nom} créé.`);
+                load(); loadCounts();
+            } catch (err) { App.showFormError(form, err.message); }
+        });
+    });
+
+    load();
+    loadCounts();
+    if (new URLSearchParams(location.search).has('new')) { document.getElementById('newBtn').click(); history.replaceState(null, '', location.pathname); }
+{% endblock %}

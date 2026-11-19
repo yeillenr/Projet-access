@@ -1,0 +1,283 @@
+{% comment %}
+    ============================================================
+    IDENTIFIANTS DE TEST (créés le 18/10/2026)
+    Ce bloc est un commentaire Django : il n'est JAMAIS envoyé au
+    navigateur, il n'est visible que dans ce fichier.
+
+      admin            / Admin2026!         -> Administrateur (accès à /admin/)
+      medecin.test     / Medecin2026!       -> Médecin
+      secretariat.test / Secretariat2026!   -> Secrétariat
+
+    Mot de passe oublié ? Dans le terminal, dossier backend :
+      ..\.venv\Scripts\python.exe manage.py changepassword <identifiant>
+    Pense à changer ces mots de passe avant une vraie mise en service.
+    ============================================================
+{% endcomment %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <title>Connexion · Cabinet médical</title>
+    {% include "partials/styles.html" %}
+    <style>
+        .auth { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .auth-aside {
+            position: relative; overflow: hidden; padding: 48px; display: flex; flex-direction: column; justify-content: space-between;
+            background: linear-gradient(150deg, #0b4f4a, #0f766e 55%, #14907f); color: #fff;
+        }
+        .auth-aside::after { content: ""; position: absolute; width: 520px; height: 520px; right: -180px; bottom: -200px; border-radius: 50%; background: rgba(255,255,255,.07); }
+        .auth-aside::before { content: ""; position: absolute; width: 300px; height: 300px; left: -90px; top: -110px; border-radius: 50%; background: rgba(255,255,255,.06); }
+        .auth-aside > * { position: relative; z-index: 1; }
+        .auth-brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.1rem; }
+        .auth-brand .mark { width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); }
+        .auth-aside h2 { font-size: clamp(1.6rem, 2.6vw, 2.2rem); font-weight: 800; margin-bottom: 14px; max-width: 460px; }
+        .auth-aside p { opacity: .85; max-width: 440px; margin: 0; }
+        .features { list-style: none; padding: 0; margin: 28px 0 0; display: flex; flex-direction: column; gap: 14px; }
+        .features li { display: flex; gap: 12px; align-items: center; font-weight: 600; }
+        .features span.ic { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.14); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .auth-aside small { opacity: .7; }
+
+        .auth-main { display: flex; align-items: center; justify-content: center; padding: 32px 20px; }
+        .auth-card { width: 100%; max-width: 440px; }
+        .auth-card .mobile-brand { display: none; align-items: center; gap: 10px; margin-bottom: 24px; font-weight: 800; }
+        .auth-card .mobile-brand .mark { width: 38px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: var(--on-primary); }
+        .auth-card h1 { margin-bottom: 6px; }
+        .auth-card > p { margin: 0 0 24px; color: var(--muted); }
+        .tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; gap: 4px; background: var(--neutral-soft); border-radius: 12px; margin-bottom: 24px; }
+        .tabs button { border: 0; background: transparent; font: inherit; font-weight: 700; color: var(--muted); padding: 10px; border-radius: 9px; cursor: pointer; }
+        .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+        form.auth-form { display: flex; flex-direction: column; gap: 16px; }
+        .role-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .role-card { position: relative; }
+        .role-card input { position: absolute; opacity: 0; pointer-events: none; }
+        .role-card span { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 12px; cursor: pointer; font-weight: 700; background: var(--surface); }
+        .role-card span small { font-weight: 500; color: var(--muted); font-size: .8rem; }
+        .role-card input:checked + span { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 1px var(--primary) inset; }
+        .role-card input:checked + span svg { color: var(--primary); }
+        .role-card input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .switch-hint { text-align: center; margin-top: 20px; color: var(--muted); font-size: .9rem; }
+        .switch-hint button { border: 0; background: none; color: var(--primary); font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+        .strength { height: 6px; border-radius: 999px; background: var(--neutral-soft); overflow: hidden; }
+        .strength > i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width .2s ease, background .2s ease; }
+
+        @media (max-width: 900px) {
+            .auth { grid-template-columns: 1fr; }
+            .auth-aside { display: none; }
+            .auth-card .mobile-brand { display: flex; }
+            .auth-main { align-items: flex-start; padding-top: calc(32px + env(safe-area-inset-top, 0px)); }
+        }
+        @media (max-width: 420px) { .role-cards { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="auth">
+        <aside class="auth-aside">
+            <div class="auth-brand"><span class="mark"><i data-icon="heart"></i></span>Cabinet médical</div>
+            <div>
+                <h2>Tout votre cabinet, au même endroit.</h2>
+                <p>Dossiers patients, agenda, consultations et ordonnances : un outil pensé pour le quotidien du praticien et du secrétariat.</p>
+                <ul class="features">
+                    <li><span class="ic"><i data-icon="users"></i></span>Dossiers patients centralisés</li>
+                    <li><span class="ic"><i data-icon="calendar"></i></span>Agenda des rendez-vous</li>
+                    <li><span class="ic"><i data-icon="file"></i></span>Ordonnances et comptes rendus en PDF</li>
+                </ul>
+            </div>
+            <small>Accès réservé au personnel du cabinet.</small>
+        </aside>
+
+        <main class="auth-main">
+            <div class="auth-card">
+                <div class="mobile-brand"><span class="mark"><i data-icon="heart"></i></span>Cabinet médical</div>
+                <h1 id="title">Bon retour 👋</h1>
+                <p id="subtitle">Connectez-vous pour accéder à votre espace.</p>
+
+                <div class="tabs" role="tablist">
+                    <button type="button" role="tab" id="tabLogin" aria-selected="true" aria-controls="loginForm">Se connecter</button>
+                    <button type="button" role="tab" id="tabRegister" aria-selected="false" aria-controls="registerForm">Créer un compte</button>
+                </div>
+
+                <div id="notice" class="alert info" hidden style="margin-bottom:16px"></div>
+
+                <!-- Connexion -->
+                <form id="loginForm" class="auth-form" role="tabpanel" novalidate>
+                    <div class="field">
+                        <label for="lUsername">Identifiant</label>
+                        <input id="lUsername" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                    </div>
+                    <div class="field">
+                        <label for="lPassword">Mot de passe</label>
+                        <div class="input-action">
+                            <input id="lPassword" name="password" type="password" autocomplete="current-password" required>
+                            <button type="button" data-toggle-pwd="lPassword" aria-label="Afficher le mot de passe"><i data-icon="eye" data-size="18"></i></button>
+                        </div>
+                    </div>
+                    <div class="form-error" hidden></div>
+                    <button class="btn btn-block" type="submit">Se connecter</button>
+                </form>
+
+                <!-- Création de compte -->
+                <form id="registerForm" class="auth-form" role="tabpanel" novalidate hidden>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="rFirst" class="req">Prénom</label>
+                            <input id="rFirst" name="first_name" autocomplete="given-name" required>
+                        </div>
+                        <div class="field">
+                            <label for="rLast" class="req">Nom</label>
+                            <input id="rLast" name="last_name" autocomplete="family-name" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <span class="field-label req">Je suis</span>
+                        <div class="role-cards">
+                            <label class="role-card"><input type="radio" name="role" value="MEDECIN" checked><span><i data-icon="stethoscope"></i>Médecin<small>Consultations, ordonnances, dossiers</small></span></label>
+                            <label class="role-card"><input type="radio" name="role" value="SECRETAIRE"><span><i data-icon="calendar"></i>Secrétariat<small>Patients et rendez-vous</small></span></label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="rUsername" class="req">Identifiant</label>
+                        <input id="rUsername" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ex. j.dupont" required>
+                        <span class="hint">C'est ce que vous taperez pour vous connecter.</span>
+                    </div>
+                    <div class="field">
+                        <label for="rEmail">Email <span class="muted">(facultatif)</span></label>
+                        <input id="rEmail" name="email" type="email" autocomplete="email">
+                    </div>
+                    <div class="field">
+                        <label for="rPassword" class="req">Mot de passe</label>
+                        <div class="input-action">
+                            <input id="rPassword" name="password" type="password" autocomplete="new-password" required>
+                            <button type="button" data-toggle-pwd="rPassword" aria-label="Afficher le mot de passe"><i data-icon="eye" data-size="18"></i></button>
+                        </div>
+                        <div class="strength" aria-hidden="true"><i id="strengthBar"></i></div>
+                        <span class="hint" id="strengthHint">8 caractères minimum, pas uniquement des chiffres.</span>
+                    </div>
+                    <div class="field">
+                        <label for="rPassword2" class="req">Confirmer le mot de passe</label>
+                        <input id="rPassword2" type="password" autocomplete="new-password" required>
+                    </div>
+                    <div class="form-error" hidden></div>
+                    <button class="btn btn-block" type="submit">Créer mon compte</button>
+                </form>
+
+                <p class="switch-hint" id="switchHint"></p>
+            </div>
+        </main>
+    </div>
+
+    {% include "partials/core_js.html" %}
+    <script>
+        hydrateIcons();
+        const params = new URLSearchParams(location.search);
+        const next = params.get('next');
+        const goNext = () => location.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
+
+        // Déjà connecté : on passe directement à l'application.
+        if (App.session.token() && App.ROLE_LABELS[App.session.role()] && !params.has('expired')) goNext();
+
+        const notice = document.getElementById('notice');
+        if (params.has('expired')) { notice.textContent = 'Votre session a expiré. Reconnectez-vous pour continuer.'; notice.hidden = false; }
+
+        /* ---- Onglets ---- */
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const tabLogin = document.getElementById('tabLogin');
+        const tabRegister = document.getElementById('tabRegister');
+        function showTab(which) {
+            const isLogin = which === 'login';
+            loginForm.hidden = !isLogin; registerForm.hidden = isLogin;
+            tabLogin.setAttribute('aria-selected', isLogin); tabRegister.setAttribute('aria-selected', !isLogin);
+            document.getElementById('title').textContent = isLogin ? 'Bon retour 👋' : 'Créer un compte';
+            document.getElementById('subtitle').textContent = isLogin
+                ? 'Connectez-vous pour accéder à votre espace.'
+                : 'Quelques informations et vous êtes prêt.';
+            document.getElementById('switchHint').innerHTML = isLogin
+                ? 'Pas encore de compte ? <button type="button" data-tab="register">Créer un compte</button>'
+                : 'Déjà un compte ? <button type="button" data-tab="login">Se connecter</button>';
+            const q = new URLSearchParams();
+            if (!isLogin) q.set('tab', 'register');
+            if (next) q.set('next', next);
+            history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+            (isLogin ? loginForm : registerForm).querySelector('input').focus();
+        }
+        tabLogin.addEventListener('click', () => showTab('login'));
+        tabRegister.addEventListener('click', () => showTab('register'));
+        document.getElementById('switchHint').addEventListener('click', e => {
+            const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab);
+        });
+        showTab(params.get('tab') === 'register' ? 'register' : 'login');
+
+        /* ---- Afficher / masquer le mot de passe ---- */
+        document.querySelectorAll('[data-toggle-pwd]').forEach(btn => btn.addEventListener('click', () => {
+            const input = document.getElementById(btn.dataset.togglePwd);
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.innerHTML = App.icon(show ? 'eyeOff' : 'eye', 18);
+            btn.setAttribute('aria-label', show ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+        }));
+
+        /* ---- Indicateur de solidité ---- */
+        document.getElementById('rPassword').addEventListener('input', e => {
+            const v = e.target.value;
+            let score = 0;
+            if (v.length >= 8) score++;
+            if (v.length >= 12) score++;
+            if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+            if (/\d/.test(v)) score++;
+            if (/[^A-Za-z0-9]/.test(v)) score++;
+            const levels = [
+                ['0%', 'var(--danger)', '8 caractères minimum, pas uniquement des chiffres.'],
+                ['25%', 'var(--danger)', 'Trop faible.'], ['50%', 'var(--warning)', 'Moyen.'],
+                ['75%', 'var(--primary)', 'Bon.'], ['100%', 'var(--success)', 'Excellent.'],
+            ];
+            const [w, c, t] = levels[v ? Math.min(Math.max(score, 1), 4) : 0];
+            const bar = document.getElementById('strengthBar');
+            bar.style.width = w; bar.style.background = c;
+            document.getElementById('strengthHint').textContent = t;
+        });
+
+        async function submitAuth(form, path, body, button) {
+            const err = form.querySelector('.form-error');
+            err.hidden = true;
+            const label = button.textContent;
+            button.disabled = true; button.textContent = 'Un instant…';
+            try {
+                const data = await App.api(path, { method: 'POST', body });
+                App.session.save(data, body.username);
+                goNext();
+            } catch (e) {
+                err.textContent = e.status === 400 && path.endsWith('login/') ? 'Identifiant ou mot de passe incorrect.' : e.message;
+                err.hidden = false;
+                button.disabled = false; button.textContent = label;
+            }
+        }
+
+        loginForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const username = loginForm.username.value.trim(), password = loginForm.password.value;
+            if (!username || !password) {
+                const err = loginForm.querySelector('.form-error');
+                err.textContent = 'Renseignez votre identifiant et votre mot de passe.'; err.hidden = false; return;
+            }
+            submitAuth(loginForm, '/api/v1/auth/login/', { username, password }, loginForm.querySelector('[type=submit]'));
+        });
+
+        registerForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const f = registerForm, err = f.querySelector('.form-error');
+            const body = {
+                first_name: f.first_name.value.trim(), last_name: f.last_name.value.trim(),
+                username: f.username.value.trim(), email: f.email.value.trim(),
+                role: f.role.value, password: f.password.value,
+            };
+            let problem = '';
+            if (!body.first_name || !body.last_name || !body.username || !body.password) problem = 'Remplissez tous les champs obligatoires.';
+            else if (body.password.length < 8) problem = 'Le mot de passe doit contenir au moins 8 caractères.';
+            else if (body.password !== document.getElementById('rPassword2').value) problem = 'Les deux mots de passe ne correspondent pas.';
+            if (problem) { err.textContent = problem; err.hidden = false; return; }
+            submitAuth(f, '/api/v1/auth/register/', body, f.querySelector('[type=submit]'));
+        });
+    </script>
+</body>
+</html>

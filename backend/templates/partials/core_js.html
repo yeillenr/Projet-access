@@ -1,0 +1,297 @@
+<script>
+/* Outils communs à toutes les pages : session, appels API, formatage, notifications, graphiques. */
+const App = (() => {
+    const ROLE_LABELS = { ADMIN: 'Administrateur', MEDECIN: 'Médecin', SECRETAIRE: 'Secrétariat' };
+
+    const RDV_STATUTS = {
+        PLANIFIE: { label: 'Planifié', cls: 'b-info' },
+        CONFIRME: { label: 'Confirmé', cls: 'b-primary' },
+        EN_SALLE: { label: 'En salle d’attente', cls: 'b-warning' },
+        EN_CONSULTATION: { label: 'En consultation', cls: 'b-warning' },
+        TERMINE: { label: 'Terminé', cls: 'b-success' },
+        ANNULE: { label: 'Annulé', cls: '' },
+        ABSENT: { label: 'Absent', cls: 'b-danger' },
+    };
+    const RDV_TYPES = { PREMIERE: 'Première visite', SUIVI: 'Suivi', URGENCE: 'Urgence' };
+    const PATIENT_STATUTS = {
+        ACTIF: { label: 'Actif', cls: 'b-success' },
+        INACTIF: { label: 'Inactif', cls: '' },
+        DECEDE: { label: 'Décédé', cls: 'b-danger' },
+    };
+    const PAIEMENT = {
+        PAYE: { label: 'Payé', cls: 'b-success' },
+        PARTIEL: { label: 'Partiel', cls: 'b-warning' },
+        IMPAYE: { label: 'Impayé', cls: 'b-danger' },
+    };
+
+    const ICONS = {
+        home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+        users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 4.1a4 4 0 0 1 0 7.8"/><path d="M22 21c0-3.3-2-6.1-5-7"/>',
+        calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        stethoscope: '<path d="M5 3v6a5 5 0 0 0 10 0V3"/><path d="M10 14v2a5 5 0 0 0 10 0v-3"/><circle cx="20" cy="11" r="2"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+        logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
+        chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+        chevronRight: '<path d="m9 18 6-6-6-6"/>',
+        file: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+        pill: '<rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="m8.5 8.5 7 7"/>',
+        download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+        x: '<path d="M6 6l12 12M18 6 6 18"/>',
+        eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+        eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+        alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17.5v.01"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        folder: '<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
+        heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+        shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/>',
+        trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+        arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+        wallet: '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/>',
+        activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+        check: '<path d="m5 12 5 5 9-10"/>',
+    };
+    function icon(name, size = 20) {
+        return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+    }
+
+    const NAV = [
+        { href: '/', key: 'home', label: 'Tableau de bord', short: 'Accueil', icon: 'home', roles: ['ADMIN', 'MEDECIN', 'SECRETAIRE'] },
+        { href: '/patients/', key: 'patients', label: 'Patients', short: 'Patients', icon: 'users', roles: ['ADMIN', 'SECRETAIRE'] },
+        { href: '/appointments/', key: 'appointments', label: 'Rendez-vous', short: 'Agenda', icon: 'calendar', roles: ['ADMIN', 'SECRETAIRE'] },
+        { href: '/consultations/', key: 'consultations', label: 'Consultations', short: 'Consult.', icon: 'stethoscope', roles: ['ADMIN', 'MEDECIN'] },
+    ];
+
+    /* ---------- Session ---------- */
+    const store = {
+        get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* stockage indisponible */ } },
+        remove(k) { try { localStorage.removeItem(k); } catch (e) { /* idem */ } },
+    };
+    const session = {
+        token: () => store.get('authToken'),
+        role: () => store.get('authRole'),
+        name: () => store.get('authUser') || '',
+        id: () => Number(store.get('authUserId')) || null,
+        save(data, fallbackName) {
+            store.set('authToken', data.access);
+            store.set('authRefresh', data.refresh);
+            store.set('authRole', data.user.role);
+            store.set('authUser', (data.user.nom_complet || '').trim() || fallbackName || data.user.username);
+            store.set('authUserId', String(data.user.id));
+        },
+        clear() { ['authToken', 'authRefresh', 'authRole', 'authUser', 'authUserId'].forEach(store.remove); },
+    };
+
+    function logout(expired) {
+        session.clear();
+        const next = encodeURIComponent(location.pathname);
+        location.replace(`/login/?next=${next}${expired ? '&expired=1' : ''}`);
+    }
+
+    /* ---------- API ---------- */
+    class ApiError extends Error {
+        constructor(message, status, data) { super(message); this.status = status; this.data = data; }
+    }
+    const FIELD_LABELS = {
+        username: 'Identifiant', password: 'Mot de passe', first_name: 'Prénom', last_name: 'Nom', email: 'Email', role: 'Rôle',
+        nom: 'Nom', prenom: 'Prénom', date_naissance: 'Date de naissance', sexe: 'Sexe', telephone: 'Téléphone',
+        patient: 'Patient', praticien: 'Praticien', date_heure: 'Date et heure', duree: 'Durée', motif: 'Motif',
+        consultation: 'Consultation', lignes: 'Médicaments', contenu: 'Contenu', statut: 'Statut',
+    };
+    function errorText(data, status) {
+        if (status === 403) return 'Vous n’avez pas les droits pour effectuer cette action.';
+        if (status === 404) return 'Élément introuvable.';
+        if (!data) return status >= 500 ? 'Erreur du serveur. Réessayez dans un instant.' : 'Une erreur est survenue.';
+        if (typeof data === 'string') return data;
+        if (typeof data.detail === 'string') return data.detail;
+        if (Array.isArray(data)) return data.join(' ');
+        const parts = [];
+        for (const [field, msgs] of Object.entries(data)) {
+            const text = Array.isArray(msgs) ? msgs.map(m => typeof m === 'string' ? m : JSON.stringify(m)).join(' ') : String(msgs);
+            parts.push(field === 'non_field_errors' ? text : `${FIELD_LABELS[field] || field} : ${text}`);
+        }
+        return parts.join(' — ') || 'Une erreur est survenue.';
+    }
+    async function api(path, { method = 'GET', body, raw = false } = {}) {
+        const headers = {};
+        const token = session.token();
+        if (token) headers.Authorization = 'Bearer ' + token;
+        const opts = { method, headers };
+        if (body !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+        let res;
+        try { res = await fetch(path, opts); }
+        catch (e) { throw new ApiError('Impossible de joindre le serveur. Vérifiez qu’il est bien lancé.', 0); }
+        if (res.status === 401 && token) { logout(true); throw new ApiError('Session expirée.', 401); }
+        if (raw) {
+            if (!res.ok) throw new ApiError(errorText(null, res.status), res.status);
+            return res;
+        }
+        const data = res.status === 204 ? null : await res.json().catch(() => null);
+        if (!res.ok) throw new ApiError(errorText(data, res.status), res.status, data);
+        return data;
+    }
+    /* Suit la pagination DRF ("next") pour récupérer toute une liste. */
+    async function fetchAll(path, maxPages = 25) {
+        let url = path, all = [], pages = 0;
+        while (url && pages < maxPages) {
+            const data = await api(url);
+            if (Array.isArray(data)) return data;
+            all = all.concat(data.results || []);
+            url = data.next; pages++;
+        }
+        return all;
+    }
+    async function download(path, filename) {
+        const res = await api(path, { raw: true });
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+        a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    /* ---------- Formatage ---------- */
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmtDateLong = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const fmtTime = d => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const fmtDateTime = d => d ? `${fmtDate(d)} · ${fmtTime(d)}` : '—';
+    const fmtMoney = v => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(v) || 0) + ' FCFA';
+    function initials(name) {
+        return String(name || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0] || '').join('').toUpperCase() || '?';
+    }
+    function badge(map, key) {
+        const s = map[key] || { label: key || '—', cls: '' };
+        return `<span class="badge ${s.cls}">${esc(s.label)}</span>`;
+    }
+    function ageFrom(dateStr) {
+        if (!dateStr) return null;
+        const b = new Date(dateStr), t = new Date();
+        let a = t.getFullYear() - b.getFullYear();
+        if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
+        return a;
+    }
+    function isoDate(d) {
+        const p = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+    function debounce(fn, ms = 300) {
+        let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    }
+
+    /* ---------- Interface ---------- */
+    function toast(message, type = 'success') {
+        const box = document.getElementById('toasts');
+        if (!box) return;
+        const el = document.createElement('div');
+        el.className = 'toast' + (type === 'error' ? ' error' : '');
+        el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        el.innerHTML = icon(type === 'error' ? 'alert' : 'check', 18) + `<span>${esc(message)}</span>`;
+        box.appendChild(el);
+        setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, type === 'error' ? 5000 : 3200);
+    }
+    function emptyState(title, text, iconName = 'folder') {
+        return `<div class="empty">${icon(iconName, 40)}<strong>${esc(title)}</strong>${text ? `<span>${esc(text)}</span>` : ''}</div>`;
+    }
+    /* Fenêtres : fermeture au clic sur le fond + boutons [data-close]. */
+    function setupDialog(dialog) {
+        dialog.addEventListener('click', e => {
+            if (e.target === dialog || e.target.closest('[data-close]')) dialog.close();
+        });
+        return dialog;
+    }
+    function openDialog(id) {
+        const d = document.getElementById(id);
+        if (!d.dataset.ready) { setupDialog(d); d.dataset.ready = '1'; }
+        const err = d.querySelector('.form-error'); if (err) err.hidden = true;
+        d.showModal();
+        const first = d.querySelector('input:not([type=hidden]):not([type=radio]), select, textarea');
+        if (first && window.matchMedia('(min-width: 641px)').matches) first.focus();
+        return d;
+    }
+    function showFormError(form, message) {
+        const err = form.querySelector('.form-error');
+        if (err) { err.textContent = message; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); }
+        else toast(message, 'error');
+    }
+    async function withBusy(button, fn) {
+        const label = button.innerHTML;
+        button.disabled = true; button.innerHTML = 'Enregistrement…';
+        try { return await fn(); }
+        finally { button.disabled = false; button.innerHTML = label; }
+    }
+
+    /* Courbe SVG simple. series = [{ name, color, points: [{ x: Date, y: Number }] }] */
+    function lineChart(series, { unit = '' } = {}) {
+        const all = series.flatMap(s => s.points);
+        if (all.length < 2) return emptyState('Pas encore assez de mesures', 'La courbe apparaîtra dès deux mesures enregistrées.', 'activity');
+        const W = 640, H = 220, L = 44, R = 16, T = 14, B = 30;
+        const xs = all.map(p => +p.x), ys = all.map(p => p.y);
+        let minX = Math.min(...xs), maxX = Math.max(...xs);
+        if (minX === maxX) { minX -= 86400000; maxX += 86400000; }
+        let minY = Math.min(...ys), maxY = Math.max(...ys);
+        const padY = (maxY - minY) * 0.15 || 2; minY -= padY; maxY += padY;
+        const sx = x => L + (x - minX) / (maxX - minX) * (W - L - R);
+        const sy = y => T + (1 - (y - minY) / (maxY - minY)) * (H - T - B);
+        let out = '';
+        for (let i = 0; i <= 4; i++) {
+            const v = minY + (maxY - minY) * i / 4, y = sy(v).toFixed(1);
+            out += `<line class="grid-line" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 8}" y="${+y + 4}" text-anchor="end">${Math.round(v)}</text>`;
+        }
+        const d1 = new Date(minX), d2 = new Date(maxX);
+        out += `<text x="${L}" y="${H - 8}">${esc(fmtDate(d1))}</text><text x="${W - R}" y="${H - 8}" text-anchor="end">${esc(fmtDate(d2))}</text>`;
+        series.forEach(s => {
+            const pts = [...s.points].sort((a, b) => a.x - b.x);
+            if (!pts.length) return;
+            const path = pts.map((p, i) => (i ? 'L' : 'M') + sx(+p.x).toFixed(1) + ',' + sy(p.y).toFixed(1)).join(' ');
+            out += `<path d="${path}" fill="none" style="stroke:${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+            out += pts.map(p => `<circle cx="${sx(+p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="4" style="fill:var(--surface);stroke:${s.color}" stroke-width="2.5"><title>${esc(fmtDate(p.x))} — ${esc(s.name)} : ${p.y} ${esc(unit)}</title></circle>`).join('');
+        });
+        const legend = series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>` : '';
+        return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Courbe d’évolution">${out}</svg>${legend}`;
+    }
+
+    /* ---------- Coquille (menu) ---------- */
+    function renderShell() {
+        const role = session.role(), page = document.body.dataset.page;
+        const items = NAV.filter(n => n.roles.includes(role));
+        const link = (n, cls, short) => `<a class="${cls}" href="${n.href}"${n.key === page ? ' aria-current="page"' : ''}>${icon(n.icon, short ? 22 : 20)}<span>${esc(short ? n.short : n.label)}</span></a>`;
+        const side = document.getElementById('sideNav');
+        if (side) side.innerHTML = items.map(n => link(n, 'nav-link')).join('')
+            + (role === 'ADMIN' ? `<a class="nav-link" href="/admin/">${icon('shield')}<span>Administration</span></a>` : '');
+        const tab = document.getElementById('tabbar');
+        if (tab) { tab.innerHTML = items.map(n => link(n, 'tab-link', true)).join(''); tab.style.setProperty('--tabs', items.length); }
+        const userHtml = `<span class="avatar">${esc(initials(session.name()))}</span>
+            <span class="user-meta"><span class="user-name">${esc(session.name())}</span><span class="user-role">${esc(ROLE_LABELS[role] || role)}</span></span>`;
+        document.querySelectorAll('[data-user]').forEach(el => el.innerHTML = userHtml);
+        document.querySelectorAll('[data-logout]').forEach(el => el.addEventListener('click', () => logout(false)));
+    }
+
+    function guard() {
+        const allowed = (document.body.dataset.roles || '').split(',').filter(Boolean);
+        const role = session.role();
+        if (!session.token() || !ROLE_LABELS[role]) { logout(false); return false; }
+        if (allowed.length && !allowed.includes(role)) { location.replace('/'); return false; }
+        renderShell();
+        document.documentElement.classList.remove('auth-pending');
+        return true;
+    }
+
+    return {
+        ROLE_LABELS, RDV_STATUTS, RDV_TYPES, PATIENT_STATUTS, PAIEMENT,
+        icon, session, logout, api, fetchAll, download, ApiError,
+        esc, fmtDate, fmtDateLong, fmtTime, fmtDateTime, fmtMoney, initials, badge, ageFrom, isoDate, debounce,
+        toast, emptyState, openDialog, showFormError, withBusy, lineChart, guard,
+    };
+})();
+
+/* Remplace les <i data-icon="nom"> par l'icône SVG correspondante. */
+function hydrateIcons(root = document) {
+    root.querySelectorAll('i[data-icon]').forEach(el => {
+        el.outerHTML = App.icon(el.dataset.icon, Number(el.dataset.size) || 20);
+    });
+}
+</script>
